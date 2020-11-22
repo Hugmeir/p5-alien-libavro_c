@@ -1,0 +1,74 @@
+use alienfile;
+use strict;
+use Env qw/@PKG_CONFIG_PATH/;
+
+plugin 'PkgConfig' => (
+    pkg_name        => 'avro-c',
+);
+
+share {
+    require Config;
+    require Alien::libjansson;
+    require Alien::libsnappy;
+
+    plugin Download => (
+        url     => 'https://github.com/apache/avro/archive/release-1.10.0.tar.gz',
+        version => qr/release-([0-9\.]+)\.tar\.gz$/,
+    );
+
+    plugin Extract => 'tar.gz';
+
+    # TODO: Shellwords
+    my $libs = join ' ',
+        Alien::libsnappy->libs,
+        Alien::libjansson->libs,
+    ;
+
+    my $lib_ext = $Config::Config{lib_ext};
+    my $lddlflags = join ' ',
+        map { m<(\S+\Q$lib_ext\E\b)> ? $1 : () }
+        Alien::libsnappy->libs_static,
+    ;
+
+    plugin 'Build::CMake' => ();
+    build [
+        \&update_pkg_conf_path,
+        'cd %{.install.extract}/lang/c',
+        [
+            '%{cmake}' => '.',
+                '-DCMAKE_C_FLAGS=' . Alien::libsnappy->cflags,
+                '-DSNAPPY_ROOT_DIR:PATH=' . Alien::libsnappy->dist_dir,
+                '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
+                @{ meta->prop->{plugin_build_cmake}->{args} },
+                '%{.install.extract}/lang/c',
+        ],
+        [
+            '%{make}',
+                '-C' => '%{.install.extract}/lang/c',
+        ],
+        [
+            '%{make}',
+                '-C' => '%{.install.extract}/lang/c',
+                'install',
+        ],
+        sub {
+            my ($build) = @_;
+            # For whatever reason the pkg-config plugin isn't picking up
+            # the avro-c.pc that we build, so:
+            my $prefix = $build->runtime_prop->{prefix};
+            $build->runtime_prop->{cflags}      ||= "-I$prefix/include ";
+            $build->runtime_prop->{libs}        ||= "-L$prefix/lib -lavro";
+            $build->runtime_prop->{libs_static} ||= "$prefix/lib/libavro$Config::Config{lib_ext}";
+        },
+    ];
+};
+
+sub update_pkg_conf_path {
+    require File::Spec;
+    push @PKG_CONFIG_PATH,
+        File::Spec->catdir(Alien::libsnappy->dist_dir,  'lib', 'pkgconfig'),
+        File::Spec->catdir(Alien::libjansson->dist_dir, 'lib', 'pkgconfig'),
+    ;
+    return;
+}
+
