@@ -2,8 +2,32 @@ use alienfile;
 use strict;
 use Env qw/@PKG_CONFIG_PATH/;
 
+# Try probing with pkg-config, but at least on
+# OSX the provided avro-c.pc file has some broken
+# entries, so this always fails:
 plugin 'PkgConfig' => (
     pkg_name        => 'avro-c',
+);
+
+# And then try with Probe::CBuilder:
+plugin 'Probe::CBuilder' => (
+  libs    => '-lavro',
+  program => q{
+#include <stdio.h>
+#include <avro.h>
+#include <avro/errors.h>
+
+int main() {
+    avro_schema_t schema = avro_schema_string();
+    if ( schema == NULL ) {
+        printf("ERROR: %s\n", avro_strerror());
+    }
+    else {
+        printf("Success!\n");
+    }
+    return 0;
+}
+},
 );
 
 share {
@@ -71,4 +95,16 @@ sub update_pkg_conf_path {
     ;
     return;
 }
+
+meta->after_hook(
+    'gather_system' => sub {
+        # if we are using the system libraries, we need to manually add -lavro into the libs
+        my ($build) = @_;
+        my $install_prop    = $build->{install_prop} // {}; # make sure not to vivify this!
+        my $cbuilder_gather = $install_prop->{plugin_probe_cbuilder_gather} // {};
+        foreach my $entry ( keys %$cbuilder_gather ) {
+            $build->{runtime_prop}->{$entry} ||= $cbuilder_gather->{$entry};
+        }
+    }
+);
 
