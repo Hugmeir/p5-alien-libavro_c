@@ -42,42 +42,42 @@ Version 0.02
 
 `Alien::libavro_c` is an `Alien` interface to `libavro_c`.
 
-Turns out that `libavro_c` is pretty hard to get hold of!  It's source is
-shipped as part of ZooKeeper, so in some systems you need to install ZooKeeper
-\-- and all the Java stack it needs -- just to get the C shared library.
+# LICENSE AND COPYRIGHT
 
-In other systems, you can get it from package managers just fine, but it doesn't
-have a `pkg-config` meta file, and so finding it ends up requiring writing and
-running C.
+This software is Copyright (c) 2020 by B Fraser.
 
-And in some systems (Alpine, Arch-Linux) there's just no way to get the library.
+This is free software, licensed under:
 
-This module tries very hard to get a working `libavro_c`:  It checks pkg-config,
-it checks by compiling code, and if there's nothing in the system that we can use,
-it builds version 3.5.6 from source.
+    The Artistic License 2.0 (GPL Compatible)
+# NAME
 
-# NOTES
+Alien::libavro\_c - libavro\_c, with alien
 
-The built-from-source version comes with some caveats!
+# VERSION
 
-First, we use version 3.5.6 because that's the last official release that
-can be built from source without needing Java; see [https://issues.apache.org/jira/browse/ZOOKEEPER-3530](https://issues.apache.org/jira/browse/ZOOKEEPER-3530)
-for details.
+Version 0.01
 
-Second, we patch a bug fixed upstream in the 3.6.x releases that lead
-to segfault on connection errors.
+# SYNOPSIS
 
-Third, we patch its `CMakeLists.txt` with some missing make targets;
-see [https://issues.apache.org/jira/browse/ZOOKEEPER-4012](https://issues.apache.org/jira/browse/ZOOKEEPER-4012).
+    use Alien::libavro_c;
 
-Fourth, we patch its `CMakeLists.txt` to change how it generates the
-statically-linked `libavro_c.a`; see [https://issues.apache.org/jira/browse/ZOOKEEPER-4014](https://issues.apache.org/jira/browse/ZOOKEEPER-4014)
+    Alien::libavro_c->libs;
+    Alien::libavro_c->libs_static;
+    Alien::libavro_c->cflags;
 
-Fifth, we patch its build process to generate a `pkg-config` meta
-file; see [https://issues.apache.org/jira/browse/ZOOKEEPER-4013](https://issues.apache.org/jira/browse/ZOOKEEPER-4013)
+# DESCRIPTION
 
-Hopefully as the above get addressed, there will be less and less
-cases where this module ends up building the library itself!
+`Alien::libavro_c` is an `Alien` interface to `libavro-c`.
+
+# AUTHOR
+
+B Fraser, `<fraserbn at gmail.com>`
+
+# BUGS
+
+Please report any bugs or feature requests to `bug-alien-libavro_c at rt.cpan.org`, or through
+the web interface at [https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Alien-libavro\_c](https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Alien-libavro_c).  I will be notified, and then you'll
+automatically be notified of progress on your bug as I make changes.
 
 # LICENSE AND COPYRIGHT
 

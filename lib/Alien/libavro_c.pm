@@ -12,11 +12,11 @@ Alien::libavro_c - libavro_c, with alien
 
 =head1 VERSION
 
-Version 0.02
+Version 0.01
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.01';
 
 
 =head1 SYNOPSIS
