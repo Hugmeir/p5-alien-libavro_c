@@ -1,14 +1,33 @@
 use alienfile;
 use strict;
 use Env qw/@PKG_CONFIG_PATH/;
+use File::Spec;
+use Alien::libjansson;
+use Alien::libsnappy;
 
-# Try probing with pkg-config, but at least on
-# OSX the provided avro-c.pc file has some broken
-# entries, so this always fails:
-plugin 'PkgConfig' => (
-    pkg_name        => 'avro-c',
-);
+sub update_pkg_conf_path {
+    # avro-c.pc has jansson as a dependency, so it won't be loaded
+    # *at all* unless we have jansson.pc in the PKG_CONFIG_PATH
+    # somewhere.  And if libjansson is coming from Alien::libjansson,
+    # we MUST set this up here, otherwise the PkgConfig plugin
+    # will never be able to use avro-c.pc
+    require File::Spec;
 
+    push @PKG_CONFIG_PATH,
+        map File::Spec->catdir($_->dist_dir,  'lib', 'pkgconfig'),
+        grep $_->install_type eq 'share',
+        qw/
+            Alien::libsnappy
+            Alien::libjansson
+        /,
+    ;
+    return;
+}
+
+# POS
+update_pkg_conf_path();
+
+sys {
 # And then try with Probe::CBuilder:
 plugin 'Probe::CBuilder' => (
   libs    => '-lavro',
@@ -29,8 +48,20 @@ int main() {
 }
 },
 );
+};
+
+# Try probing with pkg-config, but at least on
+# OSX the provided avro-c.pc file has some broken
+# entries, so this always fails:
+plugin 'PkgConfig' => (
+    pkg_name        => 'avro-c',
+);
 
 share {
+    plugin 'PkgConfig' => (
+        pkg_name        => 'avro-c',
+    );
+
     require Config;
     require Alien::libjansson;
     require Alien::libsnappy;
@@ -42,17 +73,14 @@ share {
 
     plugin Extract => 'tar.gz';
 
-    # TODO: Shellwords
-    my $libs = join ' ',
-        Alien::libsnappy->libs,
-        Alien::libjansson->libs,
-    ;
-
-    my $lib_ext = $Config::Config{lib_ext};
-    my $lddlflags = join ' ',
-        map { m<(\S+\Q$lib_ext\E\b)> ? $1 : () }
-        Alien::libsnappy->libs_static,
-    ;
+    patch [
+        '%{patch} -p1 < %{.install.patch}/0001-lang-c-pkg-config-put-lsnappy-ljansson-etc-in-Libs.p.patch',
+        '%{patch} -p1 < %{.install.patch}/0002-lang-c-cmake-option-to-skip-building-the-tests.patch',
+        '%{patch} -p1 < %{.install.patch}/0003-lang-c-snappy-has-no-pkg-config-entry.patch',
+        '%{patch} -p1 < %{.install.patch}/0004-lang-c-fix-pkg-config-Requires.patch',
+        '%{patch} -p1 < %{.install.patch}/0005-lang-c-include-jansson-in-the-pkg-config-Requires-se.patch',
+        '%{patch} -p1 < %{.install.patch}/0006-lang-c-fix-the-pkg-config-name-for-jansson-no-lib-pr.patch',
+    ];
 
     plugin 'Build::CMake' => ();
     build [
@@ -61,8 +89,16 @@ share {
         [
             '%{cmake}' => '.',
                 '-DCMAKE_C_FLAGS=' . Alien::libsnappy->cflags,
-                '-DSNAPPY_ROOT_DIR:PATH=' . Alien::libsnappy->dist_dir,
+                (
+                    # when libsnappy was built by Alien::libsnappy,
+                    # we need to point -DSNAPPY_ROOT_DIR to Alien's
+                    # installation:
+                    Alien::libsnappy->install_type eq 'share'
+                        ? '-DSNAPPY_ROOT_DIR:PATH=' . Alien::libsnappy->dist_dir
+                        : ()
+                ),
                 '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
+                '-DAVRO_SKIP_BUILD_TESTS:BOOL=true',
                 @{ meta->prop->{plugin_build_cmake}->{args} },
                 '%{.install.extract}/lang/c',
         ],
@@ -75,29 +111,12 @@ share {
                 '-C' => '%{.install.extract}/lang/c',
                 'install',
         ],
-        sub {
-            my ($build) = @_;
-            # For whatever reason the pkg-config plugin isn't picking up
-            # the avro-c.pc that we build, so:
-            my $prefix = $build->runtime_prop->{prefix};
-            $build->runtime_prop->{cflags}      ||= "-I$prefix/include ";
-            $build->runtime_prop->{libs}        ||= "-L$prefix/lib -lavro";
-            $build->runtime_prop->{libs_static} ||= "$prefix/lib/libavro$Config::Config{lib_ext}";
-        },
     ];
 };
 
-sub update_pkg_conf_path {
-    require File::Spec;
-    push @PKG_CONFIG_PATH,
-        File::Spec->catdir(Alien::libsnappy->dist_dir,  'lib', 'pkgconfig'),
-        File::Spec->catdir(Alien::libjansson->dist_dir, 'lib', 'pkgconfig'),
-    ;
-    return;
-}
-
 meta->after_hook(
     'gather_system' => sub {
+        # the joy of using multiple hooks...
         # if we are using the system libraries, we need to manually add -lavro into the libs
         my ($build) = @_;
         my $install_prop    = $build->{install_prop} // {}; # make sure not to vivify this!
