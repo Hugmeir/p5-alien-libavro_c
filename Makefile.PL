@@ -8,6 +8,8 @@ my %WriteMakefileArgs = (
     "CONFIGURE_REQUIRES" => {
         "ExtUtils::MakeMaker" => "6.52",
         "Alien::Build::Plugin::Build::CMake"     => 0,
+        "Alien::libjansson"     => 0,
+        "Alien::libsnappy"     => 0,
     },
     "PREREQ_PM" => {
         "Alien::Base" => "0.038",

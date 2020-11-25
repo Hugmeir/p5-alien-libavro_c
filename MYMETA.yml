@@ -23,6 +23,8 @@ configure_requires:
   Alien::Build: '1.40'
   Alien::Build::MM: '0.25'
   Alien::Build::Plugin::Build::CMake: '0.99'
+  Alien::libjansson: '0'
+  Alien::libsnappy: '0'
   ExtUtils::CBuilder: '0'
   ExtUtils::MakeMaker: '6.52'
 dynamic_config: 0
