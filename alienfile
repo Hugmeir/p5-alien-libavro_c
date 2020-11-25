@@ -109,6 +109,8 @@ share {
         '%{.install.extract}/lang/c',
     );
 
+    $snappy_cflags .= ' ' . join ' ', map "-I$_", shellwords($Config::Config{incpth});
+
     push @cmake_flags, '-DCMAKE_C_FLAGS=' . $snappy_cflags if $snappy_cflags;
          #. ' -I/usr/local/include '
 
