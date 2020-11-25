@@ -1,11 +1,18 @@
 use alienfile;
 use strict;
+use Config;
 use Env qw/@PKG_CONFIG_PATH/;
+use Text::ParseWords qw(shellwords);
 use File::Spec;
-use Alien::libjansson;
-use Alien::libsnappy;
 
 sub update_pkg_conf_path {
+    eval {
+        require Alien::libjansson;
+        require Alien::libsnappy;
+        1;
+    } or do {
+        # ignored
+    };
     # avro-c.pc has jansson as a dependency, so it won't be loaded
     # *at all* unless we have jansson.pc in the PKG_CONFIG_PATH
     # somewhere.  And if libjansson is coming from Alien::libjansson,
@@ -16,6 +23,7 @@ sub update_pkg_conf_path {
     push @PKG_CONFIG_PATH,
         map File::Spec->catdir($_->dist_dir,  'lib', 'pkgconfig'),
         grep $_->install_type eq 'share',
+        grep $_->can('install_type'),
         qw/
             Alien::libsnappy
             Alien::libjansson
@@ -83,7 +91,16 @@ share {
 
     plugin 'Build::CMake' => ();
 
-    my $snappy_cflags = Alien::libsnappy->cflags;
+    my $snappy_cflags;
+    eval {
+        require Alien::libsnappy;
+        $snappy_cflags = Alien::libsnappy->cflags;
+        1;
+    } or do {
+        my $e = $@ || 'Zombie error';
+        warn "Cannot get libsnappy cflags: $e";
+        # ignored
+    };
 
     my @cmake_flags = (
         '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
@@ -95,7 +112,7 @@ share {
     push @cmake_flags, '-DCMAKE_C_FLAGS=' . $snappy_cflags if $snappy_cflags;
          #. ' -I/usr/local/include '
 
-    if ( Alien::libsnappy->install_type eq 'share' ) {
+    if ( Alien::libsnappy->can('install_type') && Alien::libsnappy->install_type eq 'share' ) {
         my $snappy_libs = Alien::libsnappy->libs_static;
         my $snappy_root = Alien::libsnappy->dist_dir;
         my $libsnappy_a = File::Spec->catfile($snappy_root, 'lib', 'libsnappy' . $Config::Config{lib_ext});
