@@ -45,7 +45,7 @@ requires:
   perl: '5.006'
 resources:
   repository: https://github.com/Hugmeir/p5-alien-libavro_c
-version: '0.02'
+version: '0.03'
 x_alienfile:
   generated_by: 'Alien::Build::MM version 2.37'
   requires:
