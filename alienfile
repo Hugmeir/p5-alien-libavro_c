@@ -115,9 +115,7 @@ share {
          #. ' -I/usr/local/include '
 
     if ( Alien::libsnappy->can('install_type') && Alien::libsnappy->install_type eq 'share' ) {
-        my $snappy_libs = Alien::libsnappy->libs_static;
         my $snappy_root = Alien::libsnappy->dist_dir;
-        my $libsnappy_a = File::Spec->catfile($snappy_root, 'lib', 'libsnappy' . $Config::Config{lib_ext});
 
         # when libsnappy was built by Alien::libsnappy,
         # we need to point -DSNAPPY_ROOT_DIR to Alien's
@@ -125,9 +123,11 @@ share {
         push @cmake_flags,
             '-DSNAPPY_ROOT_DIR:PATH=' . $snappy_root;
 
-        # And we need to include the arguments to statically link against it:
+        # FindSnappy.cmake resolves libsnappy to a full path to the shared library,
+        # then the .so is compiled with the full path as opposed as with just
+        # -lsnappy -- which causes linking issues later on.
         push @cmake_flags,
-            '-DCMAKE_SHARED_LINKER_FLAGS:STRING=' . $libsnappy_a;
+            '-DSNAPPY_LIBRARIES=';
 
         # ...and because snappy is C++, we need to link using c++:
         # TODO: this doesn't work, so we are manually patching the avro
@@ -135,12 +135,6 @@ share {
         push @cmake_flags,
             '-DCMAKE_CXX_LINKER_PREFERENCE_PROPAGATES=1',
             '-DCMAKE_CXX_LINKER_PREFERENCE=90',
-        ;
-
-        # or it will include dlopen(@rpath/libsnappy.dylib) which
-        # will break at runtime, even when statically linked:
-        push @cmake_flags,
-            '-DCMAKE_SKIP_BUILD_RPATH=1',
         ;
     }
 
