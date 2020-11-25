@@ -63,8 +63,6 @@ share {
     );
 
     require Config;
-    require Alien::libjansson;
-    require Alien::libsnappy;
 
     plugin Download => (
         url     => 'https://github.com/apache/avro/archive/release-1.10.0.tar.gz',
@@ -80,31 +78,61 @@ share {
         '%{patch} -p1 < %{.install.patch}/0004-lang-c-fix-pkg-config-Requires.patch',
         '%{patch} -p1 < %{.install.patch}/0005-lang-c-include-jansson-in-the-pkg-config-Requires-se.patch',
         '%{patch} -p1 < %{.install.patch}/0006-lang-c-fix-the-pkg-config-name-for-jansson-no-lib-pr.patch',
+        '%{patch} -p1 < %{.install.patch}/0007-prefer-CXX-for-linking-due-to-snappy.patch',
     ];
 
     plugin 'Build::CMake' => ();
+
+    my $snappy_cflags = Alien::libsnappy->cflags;
+
+    my @cmake_flags = (
+        '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
+        '-DAVRO_SKIP_BUILD_TESTS:BOOL=true',
+        @{ meta->prop->{plugin_build_cmake}->{args} },
+        '%{.install.extract}/lang/c',
+    );
+
+    push @cmake_flags, '-DCMAKE_C_FLAGS=' . $snappy_cflags if $snappy_cflags;
+         #. ' -I/usr/local/include '
+
+    if ( Alien::libsnappy->install_type eq 'share' ) {
+        my $snappy_libs = Alien::libsnappy->libs_static;
+        my $snappy_root = Alien::libsnappy->dist_dir;
+        my $libsnappy_a = File::Spec->catfile($snappy_root, 'lib', 'libsnappy' . $Config::Config{lib_ext});
+
+        # when libsnappy was built by Alien::libsnappy,
+        # we need to point -DSNAPPY_ROOT_DIR to Alien's
+        # installation:
+        push @cmake_flags,
+            '-DSNAPPY_ROOT_DIR:PATH=' . $snappy_root;
+
+        # And we need to include the arguments to statically link against it:
+        push @cmake_flags,
+            '-DCMAKE_SHARED_LINKER_FLAGS:STRING=' . $libsnappy_a;
+
+        # ...and because snappy is C++, we need to link using c++:
+        # TODO: this doesn't work, so we are manually patching the avro
+        # cmake files in the patches[] section above -- see patch 0007
+        push @cmake_flags,
+            '-DCMAKE_CXX_LINKER_PREFERENCE_PROPAGATES=1',
+            '-DCMAKE_CXX_LINKER_PREFERENCE=90',
+        ;
+
+        # or it will include dlopen(@rpath/libsnappy.dylib) which
+        # will break at runtime, even when statically linked:
+        push @cmake_flags,
+            '-DCMAKE_SKIP_BUILD_RPATH=1',
+        ;
+    }
+
     build [
         \&update_pkg_conf_path,
         'cd %{.install.extract}/lang/c',
-        [
-            '%{cmake}' => '.',
-                '-DCMAKE_C_FLAGS=' . Alien::libsnappy->cflags,
-                (
-                    # when libsnappy was built by Alien::libsnappy,
-                    # we need to point -DSNAPPY_ROOT_DIR to Alien's
-                    # installation:
-                    Alien::libsnappy->install_type eq 'share'
-                        ? '-DSNAPPY_ROOT_DIR:PATH=' . Alien::libsnappy->dist_dir
-                        : ()
-                ),
-                '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
-                '-DAVRO_SKIP_BUILD_TESTS:BOOL=true',
-                @{ meta->prop->{plugin_build_cmake}->{args} },
-                '%{.install.extract}/lang/c',
-        ],
+        [ '%{cmake}' => '.', @cmake_flags ],
         [
             '%{make}',
                 '-C' => '%{.install.extract}/lang/c',
+                "VERBOSE=1",
         ],
         [
             '%{make}',
